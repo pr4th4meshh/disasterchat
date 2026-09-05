@@ -9,6 +9,12 @@ joining late does not mean joining an empty room.
 
 Terminal only. Written in Go, on top of [libp2p](https://github.com/libp2p/go-libp2p).
 
+![DisasterChat: three peers on one network](demo.gif)
+
+Three peers, no server and no internet. Prath and Leo find each other and talk;
+Sam starts later with an empty log and still receives everything said before he
+arrived.
+
 ## Try it
 
 ```console
