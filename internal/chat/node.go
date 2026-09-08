@@ -1,5 +1,5 @@
-// Package chat is one DisasterChat peer: it finds others on the local network,
-// sends and receives messages, and keeps a copy of everything it has seen.
+// Package chat is one DisasterChat peer: it finds others on the local
+// network, exchanges messages, and keeps everything it has seen.
 package chat
 
 import (
@@ -22,7 +22,6 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-// Options are the settings a Node starts with.
 type Options struct {
 	Port    string   // "0" picks a free one
 	Room    string   // must match across peers
@@ -32,7 +31,6 @@ type Options struct {
 	Dial    []string // peers to connect to by hand
 }
 
-// Node is one running DisasterChat peer.
 type Node struct {
 	ctx   context.Context
 	host  host.Host
@@ -136,7 +134,7 @@ func loadKey(path string) (crypto.PrivKey, error) {
 	return key, os.WriteFile(path, raw, 0o600)
 }
 
-// found receives peers that mDNS spots on the local network.
+// found receives peers spotted by mDNS.
 type found struct{ peers chan peer.AddrInfo }
 
 func (f *found) HandlePeerFound(p peer.AddrInfo) {
@@ -146,7 +144,7 @@ func (f *found) HandlePeerFound(p peer.AddrInfo) {
 	}
 }
 
-// discover announces us on the LAN with mDNS and connects to whoever answers.
+// discover announces us over mDNS and connects to whoever answers.
 func (n *Node) discover(tag string) error {
 	f := &found{peers: make(chan peer.AddrInfo, 32)}
 	if err := mdns.NewMdnsService(n.host, tag, f).Start(); err != nil {
@@ -176,7 +174,6 @@ func (n *Node) discover(tag string) error {
 	return nil
 }
 
-// Dial connects to a peer by address.
 func (n *Node) Dial(addr string) error {
 	a, err := ma.NewMultiaddr(addr)
 	if err != nil {
@@ -217,7 +214,7 @@ func (n *Node) Send(kind Kind, body string) (*Message, error) {
 	return m, nil
 }
 
-// readLoop takes messages off the room and stores the new ones.
+// readLoop stores the messages that arrive on the room.
 func (n *Node) readLoop() {
 	for {
 		got, err := n.sub.Next(n.ctx)
@@ -273,7 +270,6 @@ func (n *Node) name(id peer.ID) string {
 	return id.ShortString()
 }
 
-// Peers lists who we are currently connected to.
 func (n *Node) Peers() []string {
 	var out []string
 	for _, id := range n.host.Network().Peers() {
@@ -299,7 +295,7 @@ func (n *Node) SetNick(s string) {
 	n.mu.Unlock()
 }
 
-// SetLocation tags your later messages with coordinates. nil clears it.
+// SetLocation tags later messages with coordinates. nil clears it.
 func (n *Node) SetLocation(lat, lon *float64) {
 	n.mu.Lock()
 	n.lat, n.lon = lat, lon

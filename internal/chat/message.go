@@ -12,7 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-// Kind marks what sort of message this is.
 type Kind string
 
 const (
@@ -36,7 +35,7 @@ type Message struct {
 	Sig    []byte   `json:"sig"`
 }
 
-// signedBytes is what we hash and sign: the message with ID and Sig blanked out.
+// signedBytes is what we hash and sign: the message without ID and Sig.
 func (m *Message) signedBytes() ([]byte, error) {
 	copy := *m
 	copy.ID, copy.Sig = "", nil
@@ -70,7 +69,7 @@ func NewMessage(key crypto.PrivKey, self peer.ID, room, nick string, kind Kind, 
 	return m, nil
 }
 
-// Verify checks the message really came from Author and was not edited on the way.
+// Verify checks the message came from Author and was not edited.
 func (m *Message) Verify() error {
 	if m.Body == "" {
 		return errors.New("message has no text")

@@ -9,8 +9,7 @@ import (
 	"sync"
 )
 
-// History is every message this node has seen, kept on disk as one JSON
-// message per line.
+// History is every message this node has seen, one JSON line each on disk.
 type History struct {
 	mu   sync.Mutex
 	file *os.File
@@ -90,7 +89,6 @@ func (h *History) All() []*Message {
 	return out
 }
 
-// IDs lists what we hold.
 func (h *History) IDs() []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -101,7 +99,7 @@ func (h *History) IDs() []string {
 	return ids
 }
 
-// Missing returns the ids from theirs that we do not have.
+// Missing returns the ids in theirs that we do not have.
 func (h *History) Missing(theirs []string) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -131,7 +129,7 @@ func (h *History) NotIn(theirs []string) []*Message {
 	return out
 }
 
-// Get returns the messages for these ids that we actually hold.
+// Get returns the messages for these ids that we hold.
 func (h *History) Get(ids []string) []*Message {
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -1,5 +1,4 @@
-// Package ui is the terminal interface: a bubbletea program showing a
-// scrolling transcript above a text box.
+// Package ui is the terminal interface: a transcript above a text box.
 package ui
 
 import (
@@ -36,7 +35,7 @@ var (
 	noteSty = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true)
 )
 
-// line is one row of the transcript: either a message, or a note from us.
+// line is one row of the transcript: a message, or a note from us.
 type line struct {
 	at   int64
 	msg  *chat.Message // nil for a note
@@ -213,7 +212,7 @@ func (u Model) View() string {
 	}, "\n")
 }
 
-// handle deals with one submitted line: a command, or a plain message.
+// handle deals with one submitted line: a command, or a message.
 func (u *Model) handle(text string) {
 	if !strings.HasPrefix(text, "/") {
 		u.send(chat.KindChat, text)

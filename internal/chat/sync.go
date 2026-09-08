@@ -53,7 +53,7 @@ func (n *Node) syncWith(id peer.ID) {
 	out.Encode(push{Send: n.log.Get(r.Want)})
 }
 
-// serveSync is the answering side of the same conversation.
+// serveSync is the answering side.
 func (n *Node) serveSync(stream network.Stream) {
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(syncTimeout))
@@ -90,7 +90,7 @@ func (n *Node) store(msgs []*Message) {
 	}
 }
 
-// syncLoop re-syncs with everyone we are connected to.
+// syncLoop re-syncs with every connected peer.
 func (n *Node) syncLoop() {
 	tick := time.NewTicker(30 * time.Second)
 	defer tick.Stop()

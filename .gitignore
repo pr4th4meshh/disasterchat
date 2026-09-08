@@ -1,4 +1,4 @@
-disasterchat
+/disasterchat
 *.jsonl
 disasterchat.log
 identity.key
