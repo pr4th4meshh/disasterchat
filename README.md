@@ -41,6 +41,10 @@ way:
 ./disasterchat --nick Leo   --room relief --data /tmp/dc2
 ```
 
+```
+--data is only needed when you run more than one node on the same machine.
+```
+
 Separate `--data` matters: each node keeps its own key there, and two nodes
 sharing one key would be the same peer.
 
