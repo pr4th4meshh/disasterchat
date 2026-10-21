@@ -40,20 +40,26 @@ type Node struct {
 	topic *pubsub.Topic
 	sub   *pubsub.Subscription
 	log   *History
+	lock  *os.File // held while running; see lockDataDir
 
 	mu       sync.Mutex
 	nick     string
 	lat, lon *float64
 	nicks    map[peer.ID]string // last name we saw each peer use
 
-	Incoming chan *Message // messages we have not seen before
+	Incoming chan *Message // new messages in the room, ours included
 	Notices  chan string   // status lines for the UI
 }
 
 // Start brings a node up: key, host, discovery, room, history.
 func Start(ctx context.Context, opts Options) (*Node, error) {
+	lock, err := lockDataDir(opts.DataDir)
+	if err != nil {
+		return nil, err
+	}
 	key, err := loadKey(filepath.Join(opts.DataDir, "identity.key"))
 	if err != nil {
+		lock.Close()
 		return nil, err
 	}
 
@@ -88,7 +94,7 @@ func Start(ctx context.Context, opts Options) (*Node, error) {
 
 	n := &Node{
 		ctx: ctx, host: h, self: h.ID(), key: key,
-		room: opts.Room, topic: topic, sub: sub, log: log,
+		room: opts.Room, topic: topic, sub: sub, log: log, lock: lock,
 		nick:     opts.Nick,
 		nicks:    map[peer.ID]string{},
 		Incoming: make(chan *Message, 128),
@@ -203,6 +209,8 @@ func (n *Node) Send(kind Kind, body string) (*Message, error) {
 	if _, err := n.log.Add(m); err != nil {
 		return nil, err
 	}
+	// every screen hears about it, not just the one it was typed in
+	n.deliver(m)
 
 	raw, err := json.Marshal(m)
 	if err != nil {
@@ -267,7 +275,9 @@ func (n *Node) name(id peer.ID) string {
 	if nick, ok := n.nicks[id]; ok {
 		return nick
 	}
-	return id.ShortString()
+	// ShortString is "<peer.ID 12*ffkmx5>", meant for logs; people get the tail
+	s := id.String()
+	return "peer-" + s[max(len(s)-6, 0):]
 }
 
 func (n *Node) Peers() []string {
@@ -319,5 +329,7 @@ func (n *Node) Addrs() []string {
 
 func (n *Node) Close() error {
 	n.log.Close()
-	return n.host.Close()
+	err := n.host.Close()
+	n.lock.Close()
+	return err
 }

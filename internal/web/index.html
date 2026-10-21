@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>DisasterChat</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1c1b19; --dim: #6f6b64; --line: #e3e0da;
+    --accent: #8a1c1c; --accent-ink: #ffffff; --mine: #1f7a4d; --name: #5b3fa6;
+    --sos: #c4161c; --sos-bg: #fdeceb; --res: #a35a00; --res-bg: #fdf3e4;
+    --sta: #0b6e8a; --sta-bg: #e6f4f8; --ok: #1f7a4d; --bad: #c4161c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141312; --panel: #1d1c1a; --ink: #ece9e3; --dim: #9a958c; --line: #2e2c29;
+      --accent: #a32626; --accent-ink: #ffffff; --mine: #4cc38a; --name: #b39cf0;
+      --sos: #ff6b6b; --sos-bg: #3a1716; --res: #f2a54a; --res-bg: #34250f;
+      --sta: #5cc8e6; --sta-bg: #0f2a33; --ok: #4cc38a; --bad: #ff6b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    background: var(--accent); color: var(--accent-ink);
+    padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top));
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .02em; }
+  header .meta { font-size: 13px; opacity: .9; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-right: 5px; }
+  .dot.ok { background: #7ee2a8; } .dot.bad { background: #ffb3b3; }
+
+  nav { display: flex; gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); overflow-x: auto; }
+  nav button {
+    font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px;
+    border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; white-space: nowrap;
+  }
+  nav button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  nav .count { font-variant-numeric: tabular-nums; opacity: .7; margin-left: 4px; }
+  nav button.alert .count { color: var(--sos); opacity: 1; font-weight: 700; }
+
+  main { flex: 1; overflow-y: auto; padding: 8px 16px 16px; }
+  .row { padding: 6px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  .row .when { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; margin-right: 6px; }
+  .row .who { font-weight: 650; color: var(--name); }
+  .row.mine .who { color: var(--mine); }
+  .row .where { color: var(--dim); font-size: 12px; margin-left: 6px; }
+  .row.note { color: var(--dim); font-style: italic; font-size: 13px; border-bottom: none; padding: 3px 0; white-space: pre-wrap; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .05em; padding: 1px 6px; border-radius: 4px; margin-right: 6px; vertical-align: 1px; }
+  .k-sos { background: var(--sos-bg); margin: 2px -8px; padding: 8px; border-radius: 8px; border-bottom: none; }
+  .k-sos .tag { background: var(--sos); color: #fff; } .k-sos .body { color: var(--sos); font-weight: 600; }
+  .k-resource .tag { background: var(--res-bg); color: var(--res); }
+  .k-status .tag { background: var(--sta-bg); color: var(--sta); }
+  main[data-filter="sos"] .row:not(.k-sos),
+  main[data-filter="resource"] .row:not(.k-resource),
+  main[data-filter="status"] .row:not(.k-status) { display: none; }
+  .empty { color: var(--dim); text-align: center; padding: 40px 0; }
+
+  form {
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    background: var(--panel); border-top: 1px solid var(--line);
+  }
+  .kinds { display: flex; gap: 4px; width: 100%; }
+  .kinds label { flex: 1; text-align: center; font-size: 13px; padding: 5px 0; border-radius: 6px; border: 1px solid var(--line); cursor: pointer; user-select: none; }
+  .kinds input { position: absolute; opacity: 0; pointer-events: none; }
+  .kinds input:checked + span { font-weight: 700; }
+  .kinds label:has(input:checked) { border-color: var(--ink); }
+  .kinds label:has(input[value="sos"]:checked) { background: var(--sos); color: #fff; border-color: var(--sos); }
+  #text {
+    flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink);
+  }
+  #text:focus { outline: 2px solid var(--ink); outline-offset: -1px; }
+  #go { font: inherit; font-weight: 650; padding: 0 18px; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-ink); cursor: pointer; }
+  #go:disabled { opacity: .5; }
+  .banner { padding: 24px 16px; text-align: center; color: var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <h1>DisasterChat</h1>
+  <div class="meta">
+    <span><span class="dot" id="dot"></span><span id="conn">connecting…</span></span>
+    <span>room <b id="room">–</b></span>
+    <span>you <b id="nick">–</b></span>
+    <span>peers <b id="peers">0</b></span>
+    <span id="loc"></span>
+  </div>
+</header>
+<nav id="filters">
+  <button type="button" data-f="all" aria-pressed="true">All<span class="count" id="c-all"></span></button>
+  <button type="button" data-f="sos" aria-pressed="false">SOS<span class="count" id="c-sos"></span></button>
+  <button type="button" data-f="resource" aria-pressed="false">Resources<span class="count" id="c-resource"></span></button>
+  <button type="button" data-f="status" aria-pressed="false">Status<span class="count" id="c-status"></span></button>
+</nav>
+<main id="log" data-filter="all"><div class="empty" id="empty">No messages yet.</div></main>
+<form id="form" autocomplete="off">
+  <div class="kinds" role="radiogroup" aria-label="Message type">
+    <label><input type="radio" name="kind" value="chat" checked><span>Chat</span></label>
+    <label><input type="radio" name="kind" value="sos"><span>SOS</span></label>
+    <label><input type="radio" name="kind" value="resource"><span>Resource</span></label>
+    <label><input type="radio" name="kind" value="status"><span>Status</span></label>
+  </div>
+  <input id="text" maxlength="1000" placeholder="Type a message, or /help" enterkeyhint="send">
+  <button id="go" type="submit">Send</button>
+</form>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const log = $("log"), form = $("form"), text = $("text");
+  const prefix = { chat: "", sos: "/sos ", resource: "/res ", status: "/status " };
+  const tags = { sos: "SOS", resource: "RES", status: "STA" };
+
+  // The token is the key to this page. Keep it so a reload still works.
+  let token = new URLSearchParams(location.search).get("t");
+  try {
+    if (token) localStorage.setItem("dc-token", token);
+    else token = localStorage.getItem("dc-token");
+  } catch (e) {}
+  if (!token) return locked();
+
+  let self = "", myLat = null, myLon = null, loading = true;
+  const seen = new Set(), rows = [];  // rows kept in time order
+  const counts = { all: 0, sos: 0, resource: 0, status: 0 };
+  let unseenSOS = 0;
+
+  function locked() {
+    document.querySelector("main").innerHTML = "";
+    const b = document.createElement("div");
+    b.className = "banner";
+    b.textContent = "This page needs the link shown in the DisasterChat terminal (it ends in ?t=…).";
+    log.append(b);
+    form.hidden = true;
+    $("conn").textContent = "no access";
+    $("dot").className = "dot bad";
+  }
+
+  function el(tag, cls, txt) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+
+  function when(at) {
+    const d = new Date(at), now = new Date();
+    const t = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toDateString() === now.toDateString() ? t : d.toLocaleDateString([], { month: "short", day: "numeric" }) + " " + t;
+  }
+
+  // distance and direction from us to them, when both have a location
+  function away(lat, lon) {
+    if (myLat == null || myLon == null) return "";
+    const r = Math.PI / 180, R = 6371;
+    const dLat = (lat - myLat) * r, dLon = (lon - myLon) * r;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(myLat * r) * Math.cos(lat * r) * Math.sin(dLon / 2) ** 2;
+    const km = 2 * R * Math.asin(Math.sqrt(a));
+    const y = Math.sin(dLon) * Math.cos(lat * r);
+    const x = Math.cos(myLat * r) * Math.sin(lat * r) - Math.sin(myLat * r) * Math.cos(lat * r) * Math.cos(dLon);
+    const dir = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(((Math.atan2(y, x) / r) + 360) % 360 / 45) % 8];
+    return km < 1 ? ` · ${Math.round(km * 1000)} m ${dir}` : ` · ${km.toFixed(1)} km ${dir}`;
+  }
+
+  function place(row, at) {
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    let i = rows.length;
+    while (i > 0 && rows[i - 1].at > at) i--;
+    rows.splice(i, 0, { at, row });
+    if (i + 1 < rows.length) log.insertBefore(row, rows[i + 1].row);
+    else log.append(row);
+    $("empty").hidden = true;
+    if (atBottom || loading) log.scrollTop = log.scrollHeight;
+  }
+
+  function addMessage(m) {
+    if (seen.has(m.id)) return;
+    seen.add(m.id);
+    const row = el("div", "row k-" + m.kind + (m.author === self ? " mine" : ""));
+    row.append(el("span", "when", when(m.at)));
+    if (tags[m.kind]) row.append(el("span", "tag", tags[m.kind]));
+    row.append(el("span", "who", m.nick || "anon"), document.createTextNode(": "), el("span", "body", m.body));
+    if (m.lat != null && m.lon != null) {
+      row.append(el("span", "where", `@${m.lat.toFixed(5)},${m.lon.toFixed(5)}${away(m.lat, m.lon)}`));
+    }
+    place(row, m.at);
+
+    counts.all++;
+    if (m.kind in counts) counts[m.kind]++;
+    if (m.kind === "sos" && !loading && m.author !== self) {
+      unseenSOS++;
+      if (log.dataset.filter !== "sos") $("filters").querySelector('[data-f="sos"]').classList.add("alert");
+    }
+    paintCounts();
+  }
+
+  function addNote(t) {
+    place(el("div", "row note", "* " + t), Date.now());
+  }
+
+  function paintCounts() {
+    for (const k in counts) $("c-" + k).textContent = counts[k] ? " " + counts[k] : "";
+    document.title = unseenSOS ? `(${unseenSOS} SOS) DisasterChat` : "DisasterChat";
+  }
+
+  function setState(s) {
+    self = s.self;
+    $("room").textContent = s.room;
+    $("nick").textContent = s.nick;
+    $("peers").textContent = s.peers;
+    myLat = s.lat ?? null; myLon = s.lon ?? null;
+    $("loc").textContent = myLat != null ? `@${myLat.toFixed(4)},${myLon.toFixed(4)}` : "";
+  }
+
+  $("filters").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    for (const o of $("filters").children) o.setAttribute("aria-pressed", o === b);
+    log.dataset.filter = b.dataset.f;
+    if (b.dataset.f === "sos") { unseenSOS = 0; b.classList.remove("alert"); paintCounts(); }
+    log.scrollTop = log.scrollHeight;
+  });
+
+  async function post(line) {
+    const r = await fetch("send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Token": token },
+      body: JSON.stringify({ text: line }),
+    });
+    if (r.status === 401) { try { localStorage.removeItem("dc-token"); } catch (e) {} locked(); return null; }
+    if (!r.ok) throw new Error("the node said " + r.status);
+    return r.json();
+  }
+
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    let line = text.value.trim();
+    if (!line) return;
+    const kind = form.elements.kind.value;
+    if (!line.startsWith("/")) line = prefix[kind] + line;
+    $("go").disabled = true;
+    try {
+      const res = await post(line);
+      if (!res) return;
+      text.value = "";
+      for (const n of res.notes || []) addNote(n);
+      if (kind !== "chat") form.elements.kind.value = "chat";
+    } catch (err) {
+      addNote("could not reach the node: " + err.message);
+    } finally {
+      $("go").disabled = false;
+      text.focus();
+    }
+  });
+
+  function connect() {
+    const es = new EventSource("events?t=" + encodeURIComponent(token));
+    es.addEventListener("state", e => setState(JSON.parse(e.data)));
+    es.addEventListener("msg", e => addMessage(JSON.parse(e.data)));
+    es.addEventListener("notice", e => addNote(JSON.parse(e.data)));
+    es.addEventListener("ready", () => {
+      loading = false;
+      $("conn").textContent = "live";
+      $("dot").className = "dot ok";
+    });
+    es.onerror = () => {
+      $("conn").textContent = "reconnecting…";
+      $("dot").className = "dot bad";
+    };
+  }
+
+  // check the token first: EventSource cannot see a 401, it just retries
+  post("").then(r => { if (r) connect(); }).catch(() => {
+    $("conn").textContent = "node not reachable";
+    $("dot").className = "dot bad";
+    setTimeout(() => location.reload(), 5000);
+  });
+})();
+</script>
+</body>
+</html>

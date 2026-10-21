@@ -14,6 +14,7 @@ import (
 
 	"github.com/pr4th4meshh/disasterchat/internal/chat"
 	"github.com/pr4th4meshh/disasterchat/internal/ui"
+	"github.com/pr4th4meshh/disasterchat/internal/web"
 
 	tea "github.com/charmbracelet/bubbletea"
 	golog "github.com/ipfs/go-log/v2"
@@ -41,6 +42,7 @@ func run() error {
 	nick := flag.String("nick", "", "your display name (defaults to this computer's name)")
 	network := flag.String("network", "disasterchat", "discovery tag; must match on every device")
 	dataDir := flag.String("data", filepath.Join(home, ".disasterchat"), "where to keep your key and messages")
+	webAddr := flag.String("web", "", "also serve a web page here: 127.0.0.1:8080 for this computer, :8080 for phones on the network")
 	flag.Var(&dial, "peer", "address of a peer to connect to; may be repeated")
 	flag.Parse()
 
@@ -80,17 +82,36 @@ func run() error {
 	}
 	defer node.Close()
 
+	var site *web.Server
+	var links []string
+	if *webAddr != "" {
+		site = web.New(node)
+		if links, err = site.Serve(ctx, *webAddr); err != nil {
+			return err
+		}
+		log.Printf("web page: %s", strings.Join(links, " "))
+	}
+
 	prog := tea.NewProgram(ui.New(node), tea.WithAltScreen())
 
 	go func() {
+		for _, l := range links {
+			prog.Send(ui.Notice("web page: " + l))
+		}
 		for {
 			select {
 			case <-ctx.Done():
 				prog.Quit()
 				return
 			case m := <-node.Incoming:
+				if site != nil {
+					site.Message(m)
+				}
 				prog.Send(ui.Incoming{M: m})
 			case text := <-node.Notices:
+				if site != nil {
+					site.Notice(text)
+				}
 				prog.Send(ui.Notice(text))
 			}
 		}

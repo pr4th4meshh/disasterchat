@@ -217,3 +217,28 @@ func TestEditingTheFileOnDiskDropsTheMessage(t *testing.T) {
 		t.Fatal("test setup wrong: the edit did not land in the file")
 	}
 }
+
+// TestSharedDataDirIsRefused: two nodes on one directory would be the same
+// peer and never see each other, so the second must not start.
+func TestSharedDataDirIsRefused(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	room, tag := names()
+	dir := t.TempDir()
+
+	first, err := Start(ctx, Options{Port: "0", Room: room, Network: tag, Nick: "first", DataDir: dir})
+	if err != nil {
+		t.Fatalf("starting first: %v", err)
+	}
+	if second, err := Start(ctx, Options{Port: "0", Room: room, Network: tag, Nick: "second", DataDir: dir}); err == nil {
+		second.Close()
+		t.Fatal("a second node started on the same data directory")
+	}
+
+	first.Close()
+	again, err := Start(ctx, Options{Port: "0", Room: room, Network: tag, Nick: "again", DataDir: dir})
+	if err != nil {
+		t.Fatalf("directory still locked after the first node closed: %v", err)
+	}
+	again.Close()
+}
