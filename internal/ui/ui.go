@@ -4,11 +4,11 @@ package ui
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/pr4th4meshh/disasterchat/internal/chat"
+	"github.com/pr4th4meshh/disasterchat/internal/command"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -47,6 +47,7 @@ type Model struct {
 	view  viewport.Model
 	input textinput.Model
 	lines []line
+	seen  map[string]bool // ids already in lines
 
 	width, height int
 	ready         bool
@@ -60,9 +61,10 @@ func New(n *chat.Node) Model {
 	in.CharLimit = 1000
 	in.Focus()
 
-	u := Model{node: n, input: in}
+	u := Model{node: n, input: in, seen: map[string]bool{}}
 	for _, m := range n.History().All() {
 		u.lines = append(u.lines, line{at: m.At, msg: m})
+		u.seen[m.ID] = true
 	}
 	u.say(fmt.Sprintf("you are %s in room %q, with %d saved messages",
 		n.Nick(), n.Room(), n.History().Len()))
@@ -75,8 +77,13 @@ func (u *Model) say(text string) {
 	u.lines = append(u.lines, line{at: time.Now().UnixMilli(), note: text})
 }
 
-// add puts a message in the transcript, in time order.
+// add puts a message in the transcript, in time order. Our own messages
+// come back on Incoming too, so each one is shown once.
 func (u *Model) add(m *chat.Message) {
+	if u.seen[m.ID] {
+		return
+	}
+	u.seen[m.ID] = true
 	u.lines = append(u.lines, line{at: m.At, msg: m})
 	sort.SliceStable(u.lines, func(i, j int) bool { return u.lines[i].at < u.lines[j].at })
 }
@@ -212,116 +219,14 @@ func (u Model) View() string {
 	}, "\n")
 }
 
-// handle deals with one submitted line: a command, or a message.
+// handle deals with one submitted line.
 func (u *Model) handle(text string) {
-	if !strings.HasPrefix(text, "/") {
-		u.send(chat.KindChat, text)
-		return
+	r := command.Run(u.node, text)
+	if r.Sent != nil {
+		u.add(r.Sent)
 	}
-	cmd, rest, _ := strings.Cut(text, " ")
-	rest = strings.TrimSpace(rest)
-
-	switch cmd {
-	case "/sos":
-		u.needsText(rest, "/sos <what you need and where you are>", chat.KindSOS)
-	case "/res":
-		u.needsText(rest, "/res <a resource you have or need>", chat.KindResource)
-	case "/status":
-		u.needsText(rest, "/status <situation update>", chat.KindStatus)
-
-	case "/nick":
-		if rest == "" {
-			u.say("usage: /nick <name>")
-			return
-		}
-		u.node.SetNick(rest)
-		u.say("you are now " + rest)
-
-	case "/loc":
-		u.setLocation(rest)
-
-	case "/peers":
-		names := u.node.Peers()
-		if len(names) == 0 {
-			u.say("not connected to anyone yet")
-		}
-		for _, name := range names {
-			u.say("connected to " + name)
-		}
-
-	case "/me":
-		u.say("your id: " + u.node.Self().String())
-		for _, a := range u.node.Addrs() {
-			u.say("your address: " + a)
-		}
-
-	case "/dial":
-		if rest == "" {
-			u.say("usage: /dial <an address from someone else's /me>")
-			return
-		}
-		if err := u.node.Dial(rest); err != nil {
-			u.say(err.Error())
-		}
-
-	case "/help":
-		for _, l := range []string{
-			"/sos <text>       an emergency request",
-			"/res <text>       offer or ask for a resource (water, fuel, medicine)",
-			"/status <text>    a situation update",
-			"/nick <name>      change your display name",
-			"/loc <lat> <lon>  tag your messages with coordinates ( /loc clear to stop )",
-			"/peers            who you are connected to",
-			"/me               your id and address, to give to someone else",
-			"/dial <address>   connect by hand, if this network blocks discovery",
-			"/quit             exit",
-		} {
-			u.say(l)
-		}
-
-	case "/quit":
-		u.done = true
-
-	default:
-		u.say("no such command " + cmd + " -- try /help")
+	for _, note := range r.Notes {
+		u.say(note)
 	}
-}
-
-func (u *Model) needsText(rest, usage string, kind chat.Kind) {
-	if rest == "" {
-		u.say("usage: " + usage)
-		return
-	}
-	u.send(kind, rest)
-}
-
-func (u *Model) send(kind chat.Kind, body string) {
-	m, err := u.node.Send(kind, body)
-	if err != nil {
-		u.say(err.Error())
-	}
-	if m != nil {
-		u.add(m)
-	}
-}
-
-func (u *Model) setLocation(rest string) {
-	if rest == "" || rest == "clear" {
-		u.node.SetLocation(nil, nil)
-		u.say("location cleared")
-		return
-	}
-	parts := strings.FieldsFunc(rest, func(r rune) bool { return r == ' ' || r == ',' })
-	if len(parts) != 2 {
-		u.say("usage: /loc <lat> <lon>   or   /loc clear")
-		return
-	}
-	lat, err1 := strconv.ParseFloat(parts[0], 64)
-	lon, err2 := strconv.ParseFloat(parts[1], 64)
-	if err1 != nil || err2 != nil || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
-		u.say("those do not look like valid coordinates")
-		return
-	}
-	u.node.SetLocation(&lat, &lon)
-	u.say(fmt.Sprintf("location set to %.5f, %.5f", lat, lon))
+	u.done = r.Quit
 }

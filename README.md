@@ -60,6 +60,24 @@ between the first two, then quit one and start a third:
 Sam starts with an empty log and no way to have heard any of it live, and the
 whole conversation still appears.
 
+### In a browser, and on phones
+
+Add `--web` and the same chat is also served as a web page, from the program
+itself. It needs no internet: the page loads nothing from outside.
+
+```console
+./disasterchat --nick Prath --room relief --web :8080
+```
+
+The link to open appears in the chat, for example
+`http://192.168.1.20:8080/?t=tU-yfV5fF8X4`. Anyone on the same wifi can open
+it on a phone, including an iPhone, which cannot run the program itself.
+Use `--web 127.0.0.1:8080` to allow only this computer.
+
+The `?t=` part is a secret made fresh each run. **Whoever has the link posts
+as you**, under your name and key, so share it only with people you would
+hand your keyboard to.
+
 ### Commands
 
 ```
@@ -84,13 +102,16 @@ whole conversation still appears.
 | `--port` | `0` | Port to listen on; 0 picks a free one |
 | `--data` | `~/.disasterchat` | Where your key and messages are kept |
 | `--peer` | — | Address of a peer to connect to; may be repeated |
+| `--web` | — | Also serve a web page at this address, e.g. `:8080` |
 
 ## The code
 
 ```
 cmd/disasterchat/     the program you run: flags, startup, wiring
 internal/chat/        one peer: messages, history, discovery, sync
+internal/command/     the slash commands, shared by both interfaces
 internal/ui/          the terminal interface
+internal/web/         the web page, built into the binary
 ```
 
 Two packages doing the work, and a thin `main` joining them. `internal/` means
