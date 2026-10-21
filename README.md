@@ -1,13 +1,15 @@
 # DisasterChat
 
 A chat that needs no internet and no server. Everyone runs the same program.
-Peers find each other over whatever local network exists — wifi, a phone
-hotspot, an ethernet cable — and pass messages straight to one another.
+Peers find each other over whatever local network exists (wifi, a phone
+hotspot, an ethernet cable) and pass messages straight to one another.
 
 Unlike a plain LAN chat, **peers also swap the messages each one missed**, so
 joining late does not mean joining an empty room.
 
-Terminal only. Written in Go, on top of [libp2p](https://github.com/libp2p/go-libp2p).
+Runs in the terminal, and can serve the same chat as a web page so phones on
+the network can join from a browser. Written in Go, on top of
+[libp2p](https://github.com/libp2p/go-libp2p).
 
 ![DisasterChat: three peers on one network](demo.gif)
 
@@ -16,6 +18,10 @@ Sam starts later with an empty log and still receives everything said before he
 arrived.
 
 ## Try it
+
+You need [Go](https://go.dev/dl/) 1.25.7 or newer to build it. Building also
+downloads the dependencies once, so do it **while you still have internet**.
+After that the binary needs nothing.
 
 ```console
 go build -o disasterchat ./cmd/disasterchat
@@ -28,25 +34,28 @@ On a second machine on the same network, same `--room`:
 ./disasterchat --nick Leo --room relief
 ```
 
-They find each other by themselves. If they don't, see *If discovery doesn't
-work* below.
+They find each other by themselves within a few seconds, and `peers` in the
+header goes up. If it stays at 0, see [If peers don't connect](#if-peers-dont-connect).
 
 ### On one machine
 
-Two terminals, two data directories, and they will find each other the same
-way:
+Two terminals, each with **its own `--data` directory**:
 
 ```console
 ./disasterchat --nick Prath --room relief --data /tmp/dc1
 ./disasterchat --nick Leo   --room relief --data /tmp/dc2
 ```
 
+Each node keeps its key in its data directory, and two nodes sharing a key
+would be the same peer and never see each other. So a second copy pointed at
+a directory already in use refuses to start:
+
 ```
---data is only needed when you run more than one node on the same machine.
+disasterchat: another DisasterChat is already using /Users/you/.disasterchat; give this one its own, e.g. --data /tmp/dc2
 ```
 
-Separate `--data` matters: each node keeps its own key there, and two nodes
-sharing one key would be the same peer.
+On separate machines you don't need `--data`; each has its own
+`~/.disasterchat`.
 
 ### Checking that history sync works
 
@@ -60,25 +69,51 @@ between the first two, then quit one and start a third:
 Sam starts with an empty log and no way to have heard any of it live, and the
 whole conversation still appears.
 
-### In a browser, and on phones
+## In a browser, and on phones
 
-Add `--web` and the same chat is also served as a web page, from the program
-itself. It needs no internet: the page loads nothing from outside.
+Add `--web` and the program also serves the chat as a web page. The page is
+built into the binary and loads nothing from outside, so it **works with no
+internet**.
 
 ```console
 ./disasterchat --nick Prath --room relief --web :8080
 ```
 
-The link to open appears in the chat, for example
-`http://192.168.1.20:8080/?t=tU-yfV5fF8X4`. Anyone on the same wifi can open
-it on a phone, including an iPhone, which cannot run the program itself.
-Use `--web 127.0.0.1:8080` to allow only this computer.
+The links to open appear in the chat, one per network address, for example:
 
-The `?t=` part is a secret made fresh each run. **Whoever has the link posts
-as you**, under your name and key, so share it only with people you would
-hand your keyboard to.
+```
+web page: http://localhost:8080/?t=tU-yfV5fF8X4
+web page: http://192.168.1.20:8080/?t=tU-yfV5fF8X4
+```
 
-### Commands
+Open the `192.168…` one on any phone or laptop on the same wifi. That
+includes iPhones, which cannot run the program itself. Use
+`--web 127.0.0.1:8080` instead to allow only this computer.
+
+The page has the same commands as the terminal, plus:
+
+- buttons for Chat, SOS, Resource and Status, so nobody needs to type `/sos`
+- filters to show only SOS calls, resources, or status updates, with counts
+- SOS messages in red, and an `(1 SOS)` alert in the tab title when one arrives
+- distance and direction to a message's sender (`1.2 km NE`), when you and
+  they have both set `/loc`
+- light and dark mode, and it reconnects by itself if the connection drops
+
+**Whoever has the link posts as you**, under your name and key. The `?t=…`
+part is a secret made fresh each time the program starts, and the page
+refuses anyone without it. Share the link only with people you would hand
+your keyboard to.
+
+To try two nodes with web pages on one machine:
+
+```console
+./disasterchat --nick Prath --data /tmp/dc1 --web 127.0.0.1:8080
+./disasterchat --nick Leo   --data /tmp/dc2 --web 127.0.0.1:8081
+```
+
+## Commands
+
+The same in the terminal and on the web page.
 
 ```
 /sos <text>       an emergency request
@@ -92,7 +127,7 @@ hand your keyboard to.
 /quit             exit
 ```
 
-### Flags
+## Flags
 
 | Flag | Default | Meaning |
 |---|---|---|
@@ -100,9 +135,46 @@ hand your keyboard to.
 | `--room` | `chat-room` | Room to join; must match on every device |
 | `--network` | `disasterchat` | Discovery tag; must match on every device |
 | `--port` | `0` | Port to listen on; 0 picks a free one |
-| `--data` | `~/.disasterchat` | Where your key and messages are kept |
-| `--peer` | — | Address of a peer to connect to; may be repeated |
-| `--web` | — | Also serve a web page at this address, e.g. `:8080` |
+| `--data` | `~/.disasterchat` | Where your key and messages are kept; one per running copy |
+| `--peer` | none | Address of a peer to connect to; may be repeated |
+| `--web` | off | Also serve a web page here: `:8080` for the network, `127.0.0.1:8080` for this computer |
+
+## If peers don't connect
+
+`peers` stays at 0, or messages typed in one place never show up in another.
+
+- **Same machine, two copies?** Each needs its own `--data`, as above.
+- **Same `--room` and `--network` everywhere?** They must match exactly.
+- **macOS:** the first run asks for permission to find devices on the local
+  network. If that was missed or denied, discovery silently never works.
+  Allow it under *System Settings → Privacy & Security → Local Network*.
+- **Guest wifi, office networks, some VPNs and hotspots** block the
+  broadcast that discovery uses. Connect by hand instead: run `/me` on one
+  machine, and on the other run `/dial` with one of the addresses it printed
+  (pick the one on the shared network, like `/ip4/192.168.…`). Or pass it at
+  startup with `--peer`.
+- **Firewall:** allow incoming connections for `disasterchat` if your system
+  asks.
+
+Other errors you might see:
+
+| Message | Meaning |
+|---|---|
+| `another DisasterChat is already using …` | Two copies on one `--data`; give one its own |
+| `--web "…" is not an address` | Use `:8080` or `127.0.0.1:8080`, with the colon |
+| `starting web page: … address already in use` | Something else has that port; pick another |
+| `saved, but could not broadcast yet` | Nobody in range; the message goes out at the next sync |
+
+Details go to `<data>/disasterchat.log`, never to the screen.
+
+## What it does and doesn't protect
+
+Messages are **signed, not encrypted**. Nobody can forge or change a message
+in your name, even when it is passed along by others. But anyone on the
+network who knows the room name can read everything, nicknames are not
+verified (two people can both be "Leo"), and there is no protection against
+someone flooding the room. Don't send anything you would not say out loud in
+the shelter. [NOTES.md §8](NOTES.md) has the full threat model.
 
 ## The code
 
@@ -114,27 +186,34 @@ internal/ui/          the terminal interface
 internal/web/         the web page, built into the binary
 ```
 
-Two packages doing the work, and a thin `main` joining them. `internal/` means
-nothing outside this project can import them, which is the normal way to say
-"these are implementation details, not a library".
+`chat` does the networking, `ui` and `web` are two ways of showing it, and
+`command` is what both understand when you type. `internal/` means nothing
+outside this project can import them, which is the normal way to say "these
+are implementation details, not a library".
 
-Read `internal/chat` in this order:
+```console
+go test ./... -race
+```
+
+`TestDiscovery` needs a network that allows multicast, so it fails on most
+CI runners and behind some VPNs. That is the network, not the code.
 
 ### How it fits together
 
 ```
-   you type                                          the network
-      |                                                   |
-   [ ui ] --Send--> [ chat.Node ] --broadcast--> other peers
-      ^                   |                               |
-      |                   v                               |
-      +-- Incoming --- [ History ] <---- sync.go <--------+
-                      (saved to disk)
+   you type                                            the network
+      |                                                     |
+ [ ui / web ] --command--> [ chat.Node ] --broadcast--> other peers
+      ^                          |                          |
+      |                          v                          |
+      +---- Incoming ------ [ History ] <---- sync.go <-----+
+                           (saved to disk)
 ```
 
-`chat.Node` hands the UI two channels — `Incoming` for new messages and
-`Notices` for status lines — and `main.go` passes whatever arrives on them to
-bubbletea. That is the whole interface between the two packages.
+`chat.Node` hands out two channels: `Incoming` for new messages, your own
+included, and `Notices` for status lines. `main.go` passes whatever arrives
+on them to the terminal and, with `--web`, to every open web page. That is
+the whole interface between the network and the screens.
 
 **Finding people.** mDNS shouts "anyone there?" on the local network. Anyone
 running DisasterChat with the same `--network` tag answers, and we connect.
@@ -143,8 +222,9 @@ running DisasterChat with the same `--network` tag answers, and we connect.
 the room gets a copy and passes it along, so two people can talk through a
 third even if they cannot reach each other directly.
 
-**Remembering.** Every message you send or receive is appended to a plain text
-file, one JSON object per line. No database — you can read it with `cat`.
+**Remembering.** Every message you send or receive is appended to a plain
+text file, one JSON object per line. There's no database: you can read it
+with `cat`.
 
 **Catching up.** This is the part worth understanding, in `sync.go`. GossipSub
 only delivers to whoever is listening at the exact moment you press enter. In a
@@ -155,8 +235,22 @@ has and they fill in each other's gaps.
 **Signing.** Every message is signed with your key, and checked on arrival.
 This matters because of the previous point: when a message is passed along by
 someone else, the signature is what stops them changing it. An ed25519 peer ID
-contains its own public key, so this needs no server and no key exchange —
+contains its own public key, so this needs no server and no key exchange,
 which is what makes it work offline at all.
 
-**Your key** lives in `~/.disasterchat/identity.key` and is made on first run.
-Keeping it means your id stays the same between restarts.
+### What's on disk
+
+Everything lives in `--data` (default `~/.disasterchat`):
+
+```
+identity.key         your key, made on first run; keeping it keeps your id
+rooms/<room>.jsonl   every message in that room, one per line
+disasterchat.log     diagnostics, kept off the screen
+lock                 held while running, so a second copy refuses
+```
+
+Deleting `identity.key` gives you a new identity. Deleting a room file only
+forgets your copy; peers will sync it back to you.
+
+For why it is built this way, and what will bite you if you change it, read
+[NOTES.md](NOTES.md).
